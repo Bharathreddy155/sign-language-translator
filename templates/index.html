@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SignBridge AI - Hand Gesture to Sign Language Translator</title>
+  <meta name="description" content="Real-time AI sign language translation using computer vision and MediaPipe landmarks.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- TOP NAVIGATION -->
+    <header class="top-nav">
+      <div class="brand">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
+            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/>
+            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+          </svg>
+        </div>
+        <div>
+          <h1>SignBridge <span class="badge-ai">AI</span></h1>
+          <p class="subtitle">Hand Gestures to Speech Translation System</p>
+        </div>
+      </div>
+
+      <!-- SYSTEM METRICS -->
+      <div class="system-status">
+        <div class="status-chip" id="chip-camera">
+          <span class="status-dot green"></span>
+          <span>Webcam: <strong id="cam-status">Active</strong></span>
+        </div>
+        <div class="status-chip" id="chip-model">
+          <span class="status-dot cyan"></span>
+          <span>Model: <strong id="model-name">Random Forest</strong></span>
+        </div>
+        <div class="status-chip" id="chip-accuracy">
+          <span class="status-dot purple"></span>
+          <span>Accuracy: <strong id="model-acc">100%</strong></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="tab-translator" id="btn-tab-translator">
+        <span class="tab-icon">✨</span> Live Translator
+      </button>
+      <button class="tab-btn" data-tab="tab-recorder" id="btn-tab-recorder">
+        <span class="tab-icon">📹</span> Data Studio (Record)
+      </button>
+      <button class="tab-btn" data-tab="tab-model" id="btn-tab-model">
+        <span class="tab-icon">⚡</span> Model & Analytics
+      </button>
+      <button class="tab-btn" data-tab="tab-guide" id="btn-tab-guide">
+        <span class="tab-icon">📖</span> Gesture Guide
+      </button>
+    </nav>
+
+    <!-- TAB 1: LIVE TRANSLATOR -->
+    <main class="tab-content active" id="tab-translator">
+      <div class="main-grid">
+        <!-- VIDEO FEED CONTAINER -->
+        <section class="video-card glass-panel">
+          <div class="card-header">
+            <div class="live-indicator">
+              <span class="pulse-dot"></span> LIVE VISION
+            </div>
+            <div class="video-toggles">
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-skeleton" checked>
+                <span class="slider"></span>
+                <span class="label-text">Landmarks</span>
+              </label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-mirror" checked>
+                <span class="slider"></span>
+                <span class="label-text">Mirror</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="video-wrapper">
+            <video id="webcam-video" autoplay playsinline muted></video>
+            <canvas id="landmark-canvas"></canvas>
+
+            <!-- CAMERA PERMISSION BANNER (SHOWN IF BROWSER ACCESS BLOCKED) -->
+            <div id="camera-prompt" class="camera-prompt-overlay" style="display: none;">
+              <div class="prompt-icon">📷</div>
+              <h3>Camera Access Needed</h3>
+              <p>Please click below to start your webcam in the browser.</p>
+              <button class="btn-primary" id="btn-request-cam">Grant Camera Access</button>
+            </div>
+            
+            <!-- OVERLAY HUD (FLOATING IN VIDEO) -->
+            <div class="video-hud">
+              <div class="hud-box">
+                <span class="hud-label">PREDICTED SIGN</span>
+                <span class="hud-value" id="hud-sign">--</span>
+              </div>
+              <div class="hud-box">
+                <span class="hud-label">CONFIDENCE</span>
+                <span class="hud-value" id="hud-conf">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="video-footer">
+            <div class="hint-text">
+              💡 Hold any sign steadily for <strong>0.8 seconds</strong> to commit it into the sentence.
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT SIDEBAR: RECOGNITION & ACTIONS -->
+        <aside class="sidebar-deck">
+          <!-- CURRENT RECOGNITION CARD -->
+          <div class="glass-panel gesture-focus-card">
+            <h3>Active Detection</h3>
+            
+            <div class="sign-hero">
+              <div class="sign-avatar" id="sign-avatar">👋</div>
+              <div class="sign-meta">
+                <div class="sign-name" id="current-sign-name">Awaiting Hand...</div>
+                <div class="sign-status-tag" id="current-sign-status">Position hand in camera frame</div>
+              </div>
+            </div>
+
+            <!-- CONFIDENCE METER -->
+            <div class="meter-group">
+              <div class="meter-labels">
+                <span>Confidence Match</span>
+                <span class="mono-stat" id="conf-percentage">0%</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="conf-progress-bar" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <!-- HOLD TO COMMIT PROGRESS -->
+            <div class="meter-group">
+              <div class="meter-labels">
+                <span>Hold to Type</span>
+                <span class="mono-stat" id="hold-percentage">0%</span>
+              </div>
+              <div class="progress-track hold-track">
+                <div class="progress-fill hold-fill" id="hold-progress-bar" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SENTENCE ACCUMULATOR & SPEECH BOARD -->
+          <div class="glass-panel sentence-panel">
+            <div class="panel-header">
+              <h3>Formed Sentence</h3>
+              <button class="btn-icon" id="btn-copy-sentence" title="Copy to clipboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+
+            <div class="sentence-box" id="sentence-display">
+              <span class="sentence-placeholder">Signed words and letters will appear here...</span>
+            </div>
+
+            <!-- CONTROLS DECK -->
+            <div class="control-actions">
+              <button class="btn-primary btn-speak" id="btn-speak">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                </svg>
+                Speak Sentence
+              </button>
+
+              <div class="btn-row">
+                <button class="btn-secondary" id="btn-space">␣ Space</button>
+                <button class="btn-secondary" id="btn-backspace">⌫ Backspace</button>
+                <button class="btn-danger" id="btn-clear">🗑️ Clear</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <!-- TAB 2: DATA STUDIO (RECORDER) -->
+    <section class="tab-content" id="tab-recorder">
+      <div class="studio-grid">
+        <div class="glass-panel studio-card">
+          <h2>Webcam Gesture Recorder</h2>
+          <p class="description">Capture new custom hand signs directly using your webcam. Captured landmarks are saved into the dataset automatically.</p>
+
+          <form id="record-form" class="studio-form" onsubmit="event.preventDefault();">
+            <div class="form-row">
+              <div class="input-group">
+                <label for="record-gesture-name">Gesture Label</label>
+                <input type="text" id="record-gesture-name" placeholder="e.g. Hello, Thank You, A, Water..." required>
+              </div>
+              <div class="input-group">
+                <label for="record-sample-count">Number of Samples</label>
+                <input type="number" id="record-sample-count" value="100" min="20" max="500" step="10">
+              </div>
+            </div>
+
+            <div class="recorder-actions">
+              <button class="btn-primary" id="btn-start-record">
+                🔴 Start Recording Gesture
+              </button>
+            </div>
+          </form>
+
+          <div class="record-progress-box" id="record-progress-box" style="display: none;">
+            <div class="countdown-badge" id="record-countdown">Get Ready: 3</div>
+            <div class="meter-group">
+              <div class="meter-labels">
+                <span id="record-status-label">Recording in progress...</span>
+                <span class="mono-stat" id="record-samples-label">0 / 100</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="record-progress-fill" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: MODEL & ANALYTICS -->
+    <section class="tab-content" id="tab-model">
+      <div class="model-grid">
+        <div class="glass-panel">
+          <h2>Active Model Performance</h2>
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-num" id="stat-accuracy">100%</div>
+              <div class="stat-label">Validation Accuracy</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="stat-classes-count">14</div>
+              <div class="stat-label">Trained Classes</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-num" id="stat-samples-count">1400</div>
+              <div class="stat-label">Total Dataset Samples</div>
+            </div>
+          </div>
+
+          <h3>Trained Sign Classes</h3>
+          <div class="classes-badge-container" id="classes-list">
+            <!-- Badges populated by JS -->
+          </div>
+
+          <div class="retrain-deck">
+            <button class="btn-primary btn-retrain" id="btn-retrain">
+              ⚡ Retrain & Hot-Reload Model
+            </button>
+            <span class="retrain-status" id="retrain-status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: GESTURE GUIDE -->
+    <section class="tab-content" id="tab-guide">
+      <div class="glass-panel guide-container">
+        <h2>Recognized Gesture Reference</h2>
+        <p class="description">Reference postures for default fingerspelling letters and common daily expressions.</p>
+
+        <div class="guide-grid" id="guide-cards">
+          <!-- Guide items injected by JS -->
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>
